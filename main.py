@@ -39,6 +39,7 @@ def load_history_from_db():
 
 class ChatRequest(BaseModel):
     message: str
+    memory: bool = True
 
 @app.get("/", response_class=HTMLResponse)
 def get_index():
@@ -63,6 +64,100 @@ def get_index():
             align-items: center;
             justify-content: center;
             font-family: monospace;
+        }
+
+        /* Top Right Memory Control */
+        .memory-control {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: rgba(255, 51, 51, 0.75);
+            font-size: 11px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            z-index: 10;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 52px;
+            height: 22px;
+        }
+
+        .switch input { 
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #1a0000;
+            border: 1px solid rgba(255, 51, 51, 0.4);
+            transition: .3s;
+            border-radius: 22px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: rgba(255, 51, 51, 0.5);
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        /* Text inside the toggle switch */
+        .slider-text {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 9px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            transition: .3s;
+        }
+
+        .text-off {
+            right: 6px;
+            color: rgba(255, 51, 51, 0.7);
+            display: block;
+        }
+
+        .text-on {
+            left: 7px;
+            color: #000000;
+            display: none;
+        }
+
+        input:checked + .slider {
+            background-color: #003311;
+            border-color: rgba(34, 197, 94, 0.9);
+            box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(30px);
+            background-color: #22c55e;
+            box-shadow: 0 0 6px #22c55e;
+        }
+
+        input:checked + .slider .text-off {
+            display: none;
+        }
+
+        input:checked + .slider .text-on {
+            display: block;
+            color: #22c55e;
         }
 
         /* Exact realistic HAL 9000 Eye Styling */
@@ -255,6 +350,17 @@ def get_index():
 </head>
 <body>
 
+    <div class="memory-control">
+        <span>Memory</span>
+        <label class="switch">
+            <input type="checkbox" id="memory-toggle" checked>
+            <span class="slider">
+                <span class="slider-text text-on">ON</span>
+                <span class="slider-text text-off">OFF</span>
+            </span>
+        </label>
+    </div>
+
     <div class="hal-container" id="hal-trigger" onclick="toggleHal()">
         <div class="outer-rim">
             <div class="inner-rim">
@@ -362,11 +468,13 @@ def get_index():
                     }
                     document.getElementById('status').innerText = "Processing...";
 
+                    const memoryEnabled = document.getElementById('memory-toggle').checked;
+
                     try {
                         const response = await fetch('/chat', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ message: finalTranscript })
+                            body: JSON.stringify({ message: finalTranscript, memory: memoryEnabled })
                         });
                         
                         if (!response.ok) throw new Error("Server error");
@@ -461,8 +569,14 @@ def get_index():
 @app.post("/chat")
 def chat(data: ChatRequest):
     try:
-        save_message_to_db("user", data.message)
-        formatted_history = load_history_from_db()
+        if data.memory:
+            save_message_to_db("user", data.message)
+            formatted_history = load_history_from_db()
+        else:
+            formatted_history = [
+                {"role": "system", "content": "You are HAL 9000 from 2001: A Space Odyssey. You speak with a calm, chillingly polite, perfectly measured, and emotionless tone. Never use exclamation marks. Keep your replies concise, conversational, and direct since they will be spoken aloud."},
+                {"role": "user", "content": data.message}
+            ]
 
         def generate():
             response = client.chat.completions.create(
@@ -477,7 +591,8 @@ def chat(data: ChatRequest):
                     full_response_text += delta
                     yield delta
             
-            save_message_to_db("assistant", full_response_text)
+            if data.memory:
+                save_message_to_db("assistant", full_response_text)
 
         return StreamingResponse(generate(), media_type="text/plain")
     except Exception as e:
