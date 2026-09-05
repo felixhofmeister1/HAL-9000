@@ -9,7 +9,7 @@ A conversational interface and backend integration inspired by HAL 9000, built w
 - **Environment Management:** python-dotenv
 
 ## Project Structure
-
+```text
 ├── main.py          # FastAPI application entrypoint, routes, and Supabase logging
 ├── requirements.txt # Python dependencies
 └── .gitignore       # Ignored files (e.g., __pycache__, .env)
